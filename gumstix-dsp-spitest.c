@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <linux/spi/spidev.h>
+#include <netinet/in.h>
 
 #define DATA_LEN 10
 #define SPI_SPEED_HZ 500000
@@ -67,14 +68,14 @@ void alarm_handler(int signum, siginfo_t *info, void *context) {
   
   ioctl(fd, SPI_IOC_MESSAGE(1), &transfer);
   
-  int16_t count_diff = recv_packet.count - prev_packet.count;
+  int16_t count_diff = ntohs(recv_packet.count) - ntohs(prev_packet.count);
   bool corrupted = false;
   for (int i=0; i<DATA_LEN; i++)
     if (recv_packet.data[i] != prev_packet.data[i]) {
       corrupted = true;
       break;
     }
-
+  
   prev_packet.count = recv_packet.count;
   memcpy(prev_packet.data, outbound_packet.data, DATA_LEN);
   
