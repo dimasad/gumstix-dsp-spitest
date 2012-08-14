@@ -4,6 +4,8 @@ project (gumstix-dsp-spitest)
 set (gumstix-dsp-spitest_VERSION_MAJOR 0)
 set (gumstix-dsp-spitest_VERSION_MINOR 1)
 
+set (CMAKE_C_FLAGS "-std=gnu99")
+
 add_executable(gumstix-dsp-spitest gumstix-dsp-spitest.c)
 target_link_libraries(gumstix-dsp-spitest rt)
 

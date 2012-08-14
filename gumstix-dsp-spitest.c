@@ -1,21 +1,30 @@
 #include <fcntl.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <linux/spi/spidev.h>
 
-#define PACKET_LEN 10
+#define DATA_LEN 10
 #define SPI_SPEED_HZ 500000
+
+
+struct test_packet {
+  uint16_t count;
+  uint8_t data[DATA_LEN];
+} __attribute__((__packed__));
+
 
 int fd;
 timer_t timer_id;
 unsigned calls = 0;
 unsigned overruns = 0;
-uint8_t data[PACKET_LEN];
+struct test_packet prev_packet, outbound_packet, recv_packet;
 struct timespec prev_time, curr_time;
 
 
@@ -25,7 +34,7 @@ void fail(const char *msg) {
 }
 
 
-double timediff() {
+double tictoc() {
   if (clock_gettime(CLOCK_REALTIME, &curr_time))
     fail("Cannot get time");
   
@@ -42,19 +51,34 @@ void alarm_handler(int signum, siginfo_t *info, void *context) {
   
   calls++;
   overruns += timer_getoverrun(timer_id);
+  double period = tictoc();
+  
+  for (int i=0; i<DATA_LEN; i++)
+    outbound_packet.data[i] = rand();
   
   struct spi_ioc_transfer transfer = {
-    .tx_buf = (unsigned long)data,
-    .rx_buf = (unsigned long)data,
-    .len = sizeof data,
+    .tx_buf = (unsigned long)&outbound_packet,
+    .rx_buf = (unsigned long)&recv_packet,
+    .len = sizeof(struct test_packet),
     .delay_usecs = 0,
     .speed_hz = SPI_SPEED_HZ,
     .bits_per_word = 8,
   };
   
   ioctl(fd, SPI_IOC_MESSAGE(1), &transfer);
+  
+  int16_t count_diff = recv_packet.count - prev_packet.count;
+  bool corrupted = false;
+  for (int i=0; i<DATA_LEN; i++)
+    if (recv_packet.data[i] != prev_packet.data[i]) {
+      corrupted = true;
+      break;
+    }
 
-  printf("%f\n", timediff());
+  prev_packet.count = recv_packet.count;
+  memcpy(prev_packet.data, outbound_packet.data, DATA_LEN);
+  
+  printf("%f\t%d\t%d\n", period, count_diff, corrupted);
 }
 
 
@@ -71,7 +95,9 @@ int main(int argc, char *argv[]) {
   if (fd < 0)
     fail("Error opening SPI device");
   /**/
-
+  
+  printf("#");
+  
   struct sigaction alarm_action;
   alarm_action.sa_sigaction = &alarm_handler;
   alarm_action.sa_flags = 0;
@@ -88,9 +114,8 @@ int main(int argc, char *argv[]) {
   
   if (timer_create(CLOCK_REALTIME, NULL, &timer_id))
     fail("Error creating timer");
-
-  if (clock_gettime(CLOCK_REALTIME, &prev_time))
-    fail("Cannot get time");
+  
+  tictoc();
   
   struct itimerspec timer_spec;
   timer_spec.it_interval.tv_sec = 0;
