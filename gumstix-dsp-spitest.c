@@ -11,12 +11,12 @@
 #include <linux/spi/spidev.h>
 #include <netinet/in.h>
 
-#define DATA_LEN 10
+#define DATA_LEN 12
 #define SPI_SPEED_HZ 500000
 
 
 struct test_packet {
-  uint16_t count;
+  uint32_t count;
   uint8_t data[DATA_LEN];
 } __attribute__((__packed__));
 
@@ -96,6 +96,10 @@ int main(int argc, char *argv[]) {
   if (fd < 0)
     fail("Error opening SPI device");
   /**/
+  
+  uint8_t mode = SPI_MODE_0;
+  if (ioctl(fd, SPI_IOC_RD_MODE, &mode) < 0)
+    fail("Error setting spi mode.");
   
   printf("#");
   
